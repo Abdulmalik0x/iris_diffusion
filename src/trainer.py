@@ -22,12 +22,15 @@ from make_reconstructions import make_reconstructions_from_batch
 from models.actor_critic import ActorCritic
 from models.world_model import WorldModel
 from utils import configure_optimizer, EpisodeDirManager, set_seed
+import os
+os.environ["WANDB__SERVICE_WAIT"] = "300"
 
 
 class Trainer:
     def __init__(self, cfg: DictConfig) -> None:
         wandb.init(
             config=OmegaConf.to_container(cfg, resolve=True),
+            settings=wandb.Settings(_service_wait=300),
             reinit=True,
             resume=True,
             **cfg.wandb
@@ -157,7 +160,8 @@ class Trainer:
             for _ in range(grad_acc_steps):
                 batch = self.train_dataset.sample_batch(batch_num_samples, sequence_length, sample_from_start)
                 batch = self._to_device(batch)
-
+                # Generated img diffusion, along with the description of the image
+                
                 losses = component.compute_loss(batch, **kwargs_loss) / grad_acc_steps
                 loss_total_step = losses.loss_total
                 loss_total_step.backward()

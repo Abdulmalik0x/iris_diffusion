@@ -61,22 +61,22 @@ class Tokenizer(nn.Module):
 
     def encode(self, x: torch.Tensor, should_preprocess: bool = False) -> TokenizerEncoderOutput:
         if should_preprocess:
-            x = self.preprocess_input(x)
+            x = self.preprocess_input(x)  # [8, 20, 3, 64, 64] b, length, c, h, w
         shape = x.shape  # (..., C, H, W)
-        x = x.view(-1, *shape[-3:])
-        z = self.encoder(x)
+        x = x.view(-1, *shape[-3:])  # [160, 3, 64, 64]  
+        z = self.encoder(x)  # [160, 512, 4, 4]
         z = self.pre_quant_conv(z)
         b, e, h, w = z.shape
-        z_flattened = rearrange(z, 'b e h w -> (b h w) e')
+        z_flattened = rearrange(z, 'b e h w -> (b h w) e')  # z_flattened: [160*4*4, 512]
         dist_to_embeddings = torch.sum(z_flattened ** 2, dim=1, keepdim=True) + torch.sum(self.embedding.weight**2, dim=1) - 2 * torch.matmul(z_flattened, self.embedding.weight.t())
 
-        tokens = dist_to_embeddings.argmin(dim=-1)
-        z_q = rearrange(self.embedding(tokens), '(b h w) e -> b e h w', b=b, e=e, h=h, w=w).contiguous()
+        tokens = dist_to_embeddings.argmin(dim=-1)  # [160*4*4]
+        z_q = rearrange(self.embedding(tokens), '(b h w) e -> b e h w', b=b, e=e, h=h, w=w).contiguous()  # [160, 512, 4, 4]
 
         # Reshape to original
-        z = z.reshape(*shape[:-3], *z.shape[1:])
-        z_q = z_q.reshape(*shape[:-3], *z_q.shape[1:])
-        tokens = tokens.reshape(*shape[:-3], -1)
+        z = z.reshape(*shape[:-3], *z.shape[1:])  # [8, 20, 512, 4, 4]
+        z_q = z_q.reshape(*shape[:-3], *z_q.shape[1:])  # [8, 20, 512, 4, 4], what's the difference between z and z_q? z_q is the quantized version of z. What's its purpose? 
+        tokens = tokens.reshape(*shape[:-3], -1)  # [8, 20, 16]
 
         return TokenizerEncoderOutput(z, z_q, tokens)
 

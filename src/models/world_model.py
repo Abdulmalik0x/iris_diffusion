@@ -88,7 +88,7 @@ class WorldModel(nn.Module):
 
         x = self.transformer(sequences, past_keys_values)
 
-        logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)  # [8, 320, 512] I think this is the reconstruction head
         logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_ends = self.head_ends(x, num_steps=num_steps, prev_steps=prev_steps)
 
@@ -97,16 +97,17 @@ class WorldModel(nn.Module):
     def compute_loss(self, batch: Batch, tokenizer: Tokenizer, **kwargs: Any) -> LossWithIntermediateLosses:
 
         with torch.no_grad():
-            obs_tokens = tokenizer.encode(batch['observations'], should_preprocess=True).tokens  # (BL, K)
+            obs_tokens = tokenizer.encode(batch['observations'], should_preprocess=True).tokens  # (BL, K)  # [8, 20, 3, 64, 64] -> [8, 20, 16]  what happened here?
 
-        act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
-        tokens = rearrange(torch.cat((obs_tokens, act_tokens), dim=2), 'b l k1 -> b (l k1)')  # (B, L(K+1))
-
+        act_tokens = rearrange(batch['actions'], 'b l -> b l 1')  # [8, 20, 1]
+        tokens = rearrange(torch.cat((obs_tokens, act_tokens), dim=2), 'b l k1 -> b (l k1)')  # (B, L(K+1))  # [8, 340]
+        # desc: concatenate obs_tokens and act_tokens along the last dimension, then rearrange to (B, L(K+1))
+        
         outputs = self(tokens)
 
         labels_observations, labels_rewards, labels_ends = self.compute_labels_world_model(obs_tokens, batch['rewards'], batch['ends'], batch['mask_padding'])
 
-        logits_observations = rearrange(outputs.logits_observations[:, :-1], 'b t o -> (b t) o')
+        logits_observations = rearrange(outputs.logits_observations[:, :-1], 'b t o -> (b t) o')  
         loss_obs = F.cross_entropy(logits_observations, labels_observations)
         loss_rewards = F.cross_entropy(rearrange(outputs.logits_rewards, 'b t e -> (b t) e'), labels_rewards)
         loss_ends = F.cross_entropy(rearrange(outputs.logits_ends, 'b t e -> (b t) e'), labels_ends)

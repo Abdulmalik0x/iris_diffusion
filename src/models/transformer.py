@@ -51,7 +51,7 @@ class Transformer(nn.Module):
         for i, block in enumerate(self.blocks):
             x = block(x, None if past_keys_values is None else past_keys_values[i])
 
-        x = self.ln_f(x)
+        x = self.ln_f(x)  # B, T(obs+act), C  [8, 340, 256]
         return x
 
 
